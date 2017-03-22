@@ -10,6 +10,9 @@ import csv
 import codecs
 import argparse
 import pickle
+import operator
+import itertools
+import os
 from subprocess import call
 
 class_idx = [7, 8, 9, 10, 11]
@@ -20,7 +23,7 @@ def load_data(datafile):
 		return next(reader), list(reader)
 
 def load_conf_file(conffile):
-	conf = set(line.strip() for line in open(conffile))
+	conf = list(line.strip() for line in open(conffile))
 	return conf
 
 def predict_trait(X, Y):
@@ -42,21 +45,66 @@ if __name__ == "__main__":
 	labels = numpy.asarray([[line[i] for i in class_idx] for line in data]).T.tolist()
 
 	conf = load_conf_file(args['conffile'])
-	features = fe.extract_features([line[1] for line in data], conf)	# this will only pass the status update text to the feature extractor
+
+	# look through each of these feature sets and pick the best
+	# for each personality trait
+	feat_list = [['bag_of_pos_trigrams','bag_of_pos_bigrams','bag_of_pos_unigrams'],
+		['bag_of_trigrams','bag_of_bigrams','bag_of_unigrams'],
+		['characters_per_word','unique_words_ratio','words_per_sentence'],
+		['char_unigram','char_bigram','char_trigram']] + [[x] for x in conf]
 
 	if not args['load']:
-		# train new models, evaluate, store
+
+		# for each personality set
 		for i in range(len(class_idx)):
 			trait = header[class_idx[i]]
-			clf = svm.SVC(class_weight='balanced').fit(features, labels[i])
-			predicted = cross_val_predict(clf, features, labels[i], cv=10, n_jobs=-1)
-			print("%s: %.2f" % (header[class_idx[i]], metrics.accuracy_score(labels[i], predicted)))
-			with open("%s/%s.pkl" % (args['expdir'], trait), 'wb') as f:
-				pickle.dump(clf, f)
+
+			# run each feature set through the ring
+			models = []
+			for feat in feat_list:
+
+				# check if we've already done this experiment before (mostly for debugging)
+				if not os.path.exists('pickle_models/%s/%s.p' % (trait, " ".join(feat))):
+
+					feat_mat = fe.extract_features([line[1] for line in data], feat)
+
+					clf = svm.SVC(class_weight='balanced').fit(feat_mat, labels[i])
+
+					predicted = cross_val_predict(clf, feat_mat, labels[i], cv=10, n_jobs=-1)
+
+					acc = metrics.accuracy_score(labels[i], predicted)
+
+					models.append((acc, feat, clf))
+
+					print("%s, %s: %.2f" % (", ".join(feat), header[class_idx[i]], acc))
+
+					# pickle the model (for debugging)
+					with open("pickle_models/%s/%s.p" % (trait, " ".join(feat)), 'wb') as f:
+						pickle.dump((acc, feat, clf), f)
+				else:
+					with open('pickle_models/%s/%s.p' % (trait, " ".join(feat)), 'rb') as f:
+						acc, _, clf = pickle.load(f)
+
+					models.append((acc, feat, clf))
+
+					print("%s, %s: %.2f" % (", ".join(feat), header[class_idx[i]], acc))
+
+			# pick the best model
+			best_model = max(models, key=operator.itemgetter(0))
+			print("final model, %s, %s: %.2f" % (", ".join(best_model[1]), header[class_idx[i]], best_model[0]))
+
+			# pickle that model (along with a list of features)
+			with open("%s/%s.p" % (args['expdir'], trait), 'wb') as f:
+				pickle.dump((best_model[1], best_model[2]), f)
+
 	else:
 		for i in range(len(class_idx)):
+
 			trait = header[class_idx[i]]
-			with open("%s/%s.pkl" % (args['expdir'], trait), 'rb') as f:
-				clf = pickle.load(f)
-			print("%s: %.2f" % (trait, clf.score(features, labels[i])))
-		
+
+			with open("%s/%s.p" % (args['expdir'], trait), 'rb') as f:
+				feat_set, clf = pickle.load(f)
+
+			feat_mat = fe.extract_features([line[1] for line in data], feat_set)
+
+			print("%s, %s: %.2f" % (", ".join(feat_set), trait, clf.score(feat_mat, labels[i])))

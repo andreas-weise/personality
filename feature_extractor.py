@@ -232,7 +232,7 @@ def word2vec_avg():
              len(text)
              # use texts in original case (google word2vec is case sensitive)
              for text in tokenized_texts_case]
-            for i in range(0, w2v_model.vector_size)]
+            for i in range(0, 50)]
 
 
 def word2vec_max_val():
@@ -240,7 +240,7 @@ def word2vec_max_val():
     return [[max(w2v_model[token][i] for token in text if token in w2v_model)
              # use texts in original case (google word2vec is case sensitive)
              for text in tokenized_texts_case]
-            for i in range(0, w2v_model.vector_size)]
+            for i in range(0, 50)]
 
 
 def word2vec_avg_max_abs(n=5):
@@ -257,7 +257,7 @@ def word2vec_avg_max_abs(n=5):
     return [[sum(vec_lst[j][0][i] for j in range(0, min(n, len(vec_lst)))) /
              min(n, len(vec_lst))
              for vec_lst in abs_vals_sorted]
-            for i in range(0, w2v_model.vector_size)]
+            for i in range(0, 50)]
 
 
 def liwc_scores():
@@ -374,8 +374,8 @@ def extract_features(texts, conf):
         source_texts = texts
         preprocess()
         global w2v_model
-        w2v_model = gensim.models.Word2Vec.load_word2vec_format(
-            'GoogleNews-vectors-negative300.bin.gz', binary=True)
+        w2v_model = gensim.models.KeyedVectors.load_word2vec_format(
+            'data/GoogleNews-vectors-negative300.bin.gz', binary=True)
 
     # names of all supported features
     supported_feats = ['bag_of_function_words', 'bag_of_pos_trigrams',

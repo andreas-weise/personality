@@ -1,3 +1,14 @@
+bag_of_function_words
+bag_of_pos_trigrams
+bag_of_pos_bigrams
+bag_of_pos_unigrams
+bag_of_trigrams
+bag_of_bigrams
+bag_of_unigrams
+characters_per_word
+unique_words_ratio
+words_per_sentence
+word2vec_avg
 char_unigram
 char_bigram
 char_trigram

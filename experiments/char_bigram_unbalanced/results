@@ -1,7 +1,0 @@
-{'datafile': 'mypersonality_train.csv', 'load': False, 'expdir': 'experiments', 'conffile': 'conf.txt'}
-cEXT: 0.55
-cNEU: 0.67
-cAGR: 0.52
-cCON: 0.54
-cOPN: 0.73
-
