@@ -1,0 +1,15 @@
+bag_of_function_words
+bag_of_pos_trigrams
+bag_of_pos_bigrams
+bag_of_pos_unigrams
+bag_of_trigrams
+bag_of_bigrams
+bag_of_unigrams
+topic_model_scores
+characters_per_word
+unique_words_ratio
+words_per_sentence
+word2vec_avg
+word2vec_avg_max_abs
+word2vec_max_val
+liwc_scores
