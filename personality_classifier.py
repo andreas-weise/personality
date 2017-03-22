@@ -48,8 +48,8 @@ if __name__ == "__main__":
 		# train new models, evaluate, store
 		for i in range(len(class_idx)):
 			trait = header[class_idx[i]]
-			clf = svm.SVC().fit(features, labels[i])
-			predicted = cross_val_predict(clf, features, labels[i], cv=10)
+			clf = svm.SVC(class_weight='balanced').fit(features, labels[i])
+			predicted = cross_val_predict(clf, features, labels[i], cv=10, n_jobs=-1)
 			print("%s: %.2f" % (header[class_idx[i]], metrics.accuracy_score(labels[i], predicted)))
 			with open("%s/%s.pkl" % (args['expdir'], trait), 'wb') as f:
 				pickle.dump(clf, f)

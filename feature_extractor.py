@@ -357,7 +357,7 @@ def extract_features(texts, conf):
             if feature == 'liwc_scores':
                 feat_data = liwc_scores()
             if feature == 'char_unigram':
-                feat_data = bag_of_ngrams(source_texts, 1, None)
+                feat_data = bag_of_ngrams(source_texts, 1, 100)
             if feature == 'char_bigram':
                 feat_data = bag_of_ngrams(source_texts, 2, 100)
             if feature == 'char_trigram':
