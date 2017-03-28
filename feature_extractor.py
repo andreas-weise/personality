@@ -222,7 +222,7 @@ def topic_model_scores(num_topics):
                                           num_topics=num_topics)
     corpus_lsi = lsi[corpus_tfidf]
 
-    return [[scores[i][1] for scores in corpus_lsi]
+    return [[scores[i][1] if len(scores) > i else 0 for scores in corpus_lsi]
             for i in range(0, num_topics)]
 
 
@@ -292,9 +292,13 @@ def liwc_scores():
 
         response = requests.post('https://app.receptiviti.com/v2/api/person',
                                  headers=headers, data=json.dumps(data))
-
         if response.status_code != 200:
-            raise Exception('API call for LIWC scores failed!')
+            if response.status_code == 429:
+                raise Exception('LIWC API call failed, too many requests!')
+            else:
+                print(text)
+                return numpy.zeros(93)
+            # raise Exception('API call for LIWC scores failed!')
 
         liwc_raw = response.json()['contents'][0]['liwc_scores']
         # 7 keys directly contain a score, 1 key contains dict; flatten this
