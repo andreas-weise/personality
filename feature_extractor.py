@@ -25,6 +25,7 @@ cropped_texts = []
 stemmed_texts = []
 stemmed_cropped_texts = []
 w2v_model = None
+pfolder = 0
 
 
 def preprocess():
@@ -35,88 +36,90 @@ def preprocess():
     """
 
     global source_texts, tokenized_texts_case, word_counts, tokenized_texts, \
-        tagged_texts, cropped_texts, stemmed_texts, stemmed_cropped_texts
+        tagged_texts, cropped_texts, stemmed_texts, stemmed_cropped_texts, pfolder
 
     # load the processed texts from pickle dumps if those exist (check for one)
-    if os.path.exists('pickle/tokenized_texts_case.p'):
-        with open('pickle/tokenized_texts_case.p', 'rb') as p_file:
+    if os.path.exists(pfolder+'/tokenized_texts_case.p'):
+        with open(pfolder+'/tokenized_texts_case.p', 'rb') as p_file:
             tokenized_texts_case = pickle.load(p_file)
-        with open('pickle/word_counts.p', 'rb') as p_file:
+        with open(pfolder+'/word_counts.p', 'rb') as p_file:
             word_counts = pickle.load(p_file)
-        with open('pickle/tokenized_texts.p', 'rb') as p_file:
+        with open(pfolder+'/tokenized_texts.p', 'rb') as p_file:
             tokenized_texts = pickle.load(p_file)
-        with open('pickle/tagged_texts.p', 'rb') as p_file:
+        with open(pfolder+'/tagged_texts.p', 'rb') as p_file:
             tagged_texts = pickle.load(p_file)
-        with open('pickle/cropped_texts.p', 'rb') as p_file:
+        with open(pfolder+'/cropped_texts.p', 'rb') as p_file:
             cropped_texts = pickle.load(p_file)
-        with open('pickle/stemmed_texts.p', 'rb') as p_file:
+        with open(pfolder+'/stemmed_texts.p', 'rb') as p_file:
             stemmed_texts = pickle.load(p_file)
-        with open('pickle/stemmed_cropped_texts.p', 'rb') as p_file:
+        with open(pfolder+'/stemmed_cropped_texts.p', 'rb') as p_file:
             stemmed_cropped_texts = pickle.load(p_file)
         return
+    else:
+        # lower case, count words, tokenize, and tag
+        tokenized_texts_case = [nltk.word_tokenize(text) for text in source_texts]
+        source_texts = [text.lower() for text in source_texts]
+        word_counts = [len(text.split()) for text in source_texts]
+        tokenized_texts = [nltk.word_tokenize(text) for text in source_texts]
+        tagged_texts = [[tag[1] for tag in nltk.pos_tag(text)]
+                        for text in tokenized_texts]
 
-    # lower case, count words, tokenize, and tag
-    tokenized_texts_case = [nltk.word_tokenize(text) for text in source_texts]
-    source_texts = [text.lower() for text in source_texts]
-    word_counts = [len(text.split()) for text in source_texts]
-    tokenized_texts = [nltk.word_tokenize(text) for text in source_texts]
-    tagged_texts = [[tag[1] for tag in nltk.pos_tag(text)]
-                    for text in tokenized_texts]
+        stop_list = nltk.corpus.stopwords.words('english')
+        stop_list.extend(['.', ',', ':', ';', '(', ')', '!', '?', '"', "'", "''",
+                          '``', '-', "'s", 'would', '[', ']', '{', '}', '...',
+                          'p.'])
+        cropped_texts = [[word for word in text if word not in stop_list]
+                         for text in tokenized_texts]
 
-    stop_list = nltk.corpus.stopwords.words('english')
-    stop_list.extend(['.', ',', ':', ';', '(', ')', '!', '?', '"', "'", "''",
-                      '``', '-', "'s", 'would', '[', ']', '{', '}', '...',
-                      'p.'])
-    cropped_texts = [[word for word in text if word not in stop_list]
-                     for text in tokenized_texts]
+        # stem using standard nltk porter stemmer
+        porter = nltk.PorterStemmer()
+        # stemmed_texts = [[porter.stem(t) for t in tokens]
+        #                 for tokens in tokenized_texts]
+        # iterating instead of list comprehension to allow exception handling
+        stemmed_texts = []
+        for tokens in tokenized_texts:
+            stemmed_text = []
+            for t in tokens:
+                try:
+                    stemmed_text.extend([porter.stem(t)])
+                except IndexError:
+                    stemmed_text.extend('')
+            stemmed_texts.append(stemmed_text)
+        stemmed_cropped_texts = []
+        for tokens in cropped_texts:
+            stemmed_cropped_text = []
+            for t in tokens:
+                try:
+                    stemmed_cropped_text.extend([porter.stem(t)])
+                except IndexError:
+                    stemmed_cropped_text.extend('')
+            stemmed_cropped_texts.append(stemmed_cropped_text)
 
-    # stem using standard nltk porter stemmer
-    porter = nltk.PorterStemmer()
-    # stemmed_texts = [[porter.stem(t) for t in tokens]
-    #                 for tokens in tokenized_texts]
-    # iterating instead of list comprehension to allow exception handling
-    for tokens in tokenized_texts:
-        stemmed_text = []
-        for t in tokens:
-            try:
-                stemmed_text.extend([porter.stem(t)])
-            except IndexError:
-                stemmed_text.extend('')
-        stemmed_texts.append(stemmed_text)
-    for tokens in cropped_texts:
-        stemmed_cropped_text = []
-        for t in tokens:
-            try:
-                stemmed_cropped_text.extend([porter.stem(t)])
-            except IndexError:
-                stemmed_cropped_text.extend('')
-        stemmed_cropped_texts.append(stemmed_cropped_text)
+        # remove rare words
+        # vocab = nltk.FreqDist(w for w in line for line in stemmed_texts)
+        vocab = nltk.FreqDist(w for text in stemmed_texts for w in text)
+        rare_words_list = [re.escape(word) for word in vocab.hapaxes()]
+        rare_words_regex = re.compile(r'\b(%s)\b' % '|'.join(rare_words_list))
+        stemmed_texts = [[rare_words_regex.sub('<RARE>', w) for w in text]
+                         for text in stemmed_texts]
+        # note: source_texts will be lower case, but only stemmed_texts will have
+        # rare words removed
 
-    # remove rare words
-    # vocab = nltk.FreqDist(w for w in line for line in stemmed_texts)
-    vocab = nltk.FreqDist(w for text in stemmed_texts for w in text)
-    rare_words_list = [re.escape(word) for word in vocab.hapaxes()]
-    rare_words_regex = re.compile(r'\b(%s)\b' % '|'.join(rare_words_list))
-    stemmed_texts = [[rare_words_regex.sub('<RARE>', w) for w in text]
-                     for text in stemmed_texts]
-    # note: source_texts will be lower case, but only stemmed_texts will have
-    # rare words removed
-
-    # dump the processed texts to pickle files for next time they are needed
-    with open('pickle/tokenized_texts_case.p', 'wb') as p_file:
-        pickle.dump(tokenized_texts_case, p_file)
-    with open('pickle/word_counts.p', 'wb') as p_file:
-        pickle.dump(word_counts, p_file)
-    with open('pickle/tokenized_texts.p', 'wb') as p_file:
-        pickle.dump(tokenized_texts, p_file)
-    with open('pickle/tagged_texts.p', 'wb') as p_file:
-        pickle.dump(tagged_texts, p_file)
-    with open('pickle/cropped_texts.p', 'wb') as p_file:
-        pickle.dump(cropped_texts, p_file)
-    with open('pickle/stemmed_texts.p', 'wb') as p_file:
-        pickle.dump(stemmed_texts, p_file)
-    with open('pickle/stemmed_cropped_texts.p', 'wb') as p_file:
-        pickle.dump(stemmed_cropped_texts, p_file)
+        # dump the processed texts to pickle files for next time they are needed
+        with open(pfolder+'/tokenized_texts_case.p', 'wb') as p_file:
+            pickle.dump(tokenized_texts_case, p_file)
+        with open(pfolder+'/word_counts.p', 'wb') as p_file:
+            pickle.dump(word_counts, p_file)
+        with open(pfolder+'/tokenized_texts.p', 'wb') as p_file:
+            pickle.dump(tokenized_texts, p_file)
+        with open(pfolder+'/tagged_texts.p', 'wb') as p_file:
+            pickle.dump(tagged_texts, p_file)
+        with open(pfolder+'/cropped_texts.p', 'wb') as p_file:
+            pickle.dump(cropped_texts, p_file)
+        with open(pfolder+'/stemmed_texts.p', 'wb') as p_file:
+            pickle.dump(stemmed_texts, p_file)
+        with open(pfolder+'/stemmed_cropped_texts.p', 'wb') as p_file:
+            pickle.dump(stemmed_cropped_texts, p_file)
 
 
 def bag_of_function_words():
@@ -228,6 +231,10 @@ def topic_model_scores(num_topics):
 
 def word2vec_avg():
     """ returns avg vector for words in each text """
+    global w2v_model
+    w2v_model = gensim.models.KeyedVectors.load_word2vec_format(
+        'data/GoogleNews-vectors-negative300.bin.gz', binary=True)
+
     return [[sum(w2v_model[token][i] for token in text if token in w2v_model) /
              len(text)
              # use texts in original case (google word2vec is case sensitive)
@@ -314,20 +321,33 @@ def liwc_scores():
             for i in range(0, len(text_scores[0]))]
 
 
-def extract_features(texts, conf):
+def extract_features(texts, conf, folder):
     """ extracts features in given conf from each text in given list of texts
 
     args:
         texts: list of texts from which to extract features
         conf: set of identifiers of features to be extracted; from conf file
+        folder: which pickle folder
 
     returns:
         list of lists, #instances x #features = len(texts) x len(conf)
     """
+
+    global pfolder
+    if folder == 0:
+        pfolder = "pickle_concat"
+    else:
+        pfolder = "pickle_ind"
+
+    global source_texts
+    source_texts = texts
+    preprocess()
+
     def load_or_compute(feature):
+        global pfolder
         feat_data = []
-        if os.path.exists('pickle/%s.p' % feature):
-            with open('pickle/%s.p' % feature, 'rb') as p_file:
+        if os.path.exists('%s/%s.p' % (pfolder, feature)):
+            with open('%s/%s.p' % (pfolder, feature), 'rb') as p_file:
                 feat_data = pickle.load(p_file)
         else:
             if feature == 'bag_of_function_words':
@@ -366,20 +386,11 @@ def extract_features(texts, conf):
                 feat_data = bag_of_ngrams(source_texts, 2, 100)
             if feature == 'char_trigram':
                 feat_data = bag_of_ngrams(source_texts, 3, 500)
-            with open('pickle/%s.p' % feature, 'wb') as p_file:
+            with open('%s/%s.p' % (pfolder, feature), 'wb') as p_file:
                 pickle.dump(feat_data, p_file)
         return feat_data
 
     all_features = conf is None or len(conf) == 0
-
-    # use global variables to pass around data
-    global source_texts
-    if len(source_texts) == 0:
-        source_texts = texts
-        preprocess()
-        global w2v_model
-        w2v_model = gensim.models.KeyedVectors.load_word2vec_format(
-            'data/GoogleNews-vectors-negative300.bin.gz', binary=True)
 
     # names of all supported features
     supported_feats = ['bag_of_function_words', 'bag_of_pos_trigrams',

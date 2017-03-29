@@ -1,6 +1,6 @@
 # label a status update for personality
 
-from sklearn.model_selection import cross_val_score, cross_val_predict
+from sklearn.model_selection import cross_val_score, cross_val_predict, GroupKFold
 from sklearn import svm, preprocessing, metrics
 import feature_extractor as fe
 import numpy
@@ -48,10 +48,22 @@ if __name__ == "__main__":
 
 	# look through each of these feature sets and pick the best
 	# for each personality trait
-	feat_list = [['bag_of_pos_trigrams','bag_of_pos_bigrams','bag_of_pos_unigrams'],
+	'''feat_list = [ ['bag_of_pos_trigrams','bag_of_pos_bigrams','bag_of_pos_unigrams'],
 		['bag_of_trigrams','bag_of_bigrams','bag_of_unigrams'],
 		['characters_per_word','unique_words_ratio','words_per_sentence'],
-		['char_unigram','char_bigram','char_trigram']] + [[x] for x in conf]
+		['char_unigram','char_bigram','char_trigram']
+		] + [[x] for x in conf]'''
+	feat_list = [['char_bigram'], ['word2vec_avg'], ['char_unigram','char_bigram','char_trigram']]
+
+	# concat statuses by user id
+	user_ids = []
+	source_texts = []
+	for line in data:
+	    if len(user_ids) == 0 or line[0] != user_ids[-1]:
+	        source_texts.append(line[1])
+	    else:
+	        source_texts[-1] = source_texts[-1] + '\n\n' + line[1]
+	    user_ids.append(line[0])
 
 	if not args['load']:
 
@@ -61,33 +73,32 @@ if __name__ == "__main__":
 
 			# run each feature set through the ring
 			models = []
-			for feat in feat_list:
+			for feat_set in feat_list:
 
 				# check if we've already done this experiment before (mostly for debugging)
-				if not os.path.exists('pickle_models/%s/%s.p' % (trait, " ".join(feat))):
+				if not os.path.exists('pickle_models/%s/%s.p' % (trait, " ".join(feat_set))):
 
-					feat_mat = fe.extract_features([line[1] for line in data], feat)
+					# evaluate with individuals
+					feat_mat = fe.extract_features([line[1] for line in data], feat_set, 1)
 
+					accs = cross_val_score(svm.SVC(class_weight='balanced'), feat_mat, labels[i], cv=10, n_jobs=-1)
+					acc = numpy.mean(accs)
 					clf = svm.SVC(class_weight='balanced').fit(feat_mat, labels[i])
 
-					predicted = cross_val_predict(clf, feat_mat, labels[i], cv=10, n_jobs=-1)
+					models.append((acc, feat_set, clf))
 
-					acc = metrics.accuracy_score(labels[i], predicted)
-
-					models.append((acc, feat, clf))
-
-					print("%s, %s: %.2f" % (", ".join(feat), header[class_idx[i]], acc))
+					print("%s, %s: %.2f" % (", ".join(feat_set), header[class_idx[i]], acc))
 
 					# pickle the model (for debugging)
-					with open("pickle_models/%s/%s.p" % (trait, " ".join(feat)), 'wb') as f:
-						pickle.dump((acc, feat, clf), f)
+					with open("pickle_models/%s/%s.p" % (trait, " ".join(feat_set)), 'wb') as f:
+						pickle.dump((acc, feat_set, clf), f)
 				else:
-					with open('pickle_models/%s/%s.p' % (trait, " ".join(feat)), 'rb') as f:
+					with open('pickle_models/%s/%s.p' % (trait, " ".join(feat_set)), 'rb') as f:
 						acc, _, clf = pickle.load(f)
 
-					models.append((acc, feat, clf))
+					models.append((acc, feat_set, clf))
 
-					print("%s, %s: %.2f" % (", ".join(feat), header[class_idx[i]], acc))
+					print("%s, %s: %.2f" % (", ".join(feat_set), header[class_idx[i]], acc))
 
 			# pick the best model
 			best_model = max(models, key=operator.itemgetter(0))
@@ -105,6 +116,6 @@ if __name__ == "__main__":
 			with open("%s/%s.p" % (args['expdir'], trait), 'rb') as f:
 				feat_set, clf = pickle.load(f)
 
-			feat_mat = fe.extract_features([line[1] for line in data], feat_set)
+			feat_mat = fe.extract_features([line[1] for line in data], feat_set, 1)
 
 			print("%s, %s: %.2f" % (", ".join(feat_set), trait, clf.score(feat_mat, labels[i])))
